@@ -24,7 +24,7 @@ fn checksum_calculator(data: &[u8]) -> u16 {
 
 fn run(reader: &mut BufReader<File>) -> Result<(), Box<dyn Error>> {
     let buf = reader.fill_buf()?;
-    let length = buf.len() / 78;
+    let length = buf.len() / 76;
     println!("Records Found: {}",length);
 
     let file_path = "output.csv";
@@ -55,76 +55,64 @@ fn run(reader: &mut BufReader<File>) -> Result<(), Box<dyn Error>> {
     // let mut reader2 = BufReader::new(l);
 
     for i in 0..length {
-        let index = i*78;
+        let index = i*76;
         rdr.set_position(index as u64);
-        let mut buffer = &buf[index..(index)+78];
+        let mut buffer = &buf[index..(index)+76];
 
-        let ccs = checksum_calculator(&buffer[0..76]);
-        println!("Calculated Checksum: {ccs}");
+        // let ccs = checksum_calculator(&buffer[0..76]);
 
-        let byte = buffer[76];
-        let byte2 = buffer[77];
-        let rcs = (byte as u16) | (byte2 as u16) << 8;
+        let datetime = rdr.read_u32::<LittleEndian>().unwrap();
+        let altitude = rdr.read_f32::<LittleEndian>().unwrap();
+        let position = (
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap()
+        );
+        let velocity = (
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap()
+        );
+        let acceleration = (
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap()
+        );
+        rdr.read_f32::<LittleEndian>().unwrap();
+        rdr.read_f32::<LittleEndian>().unwrap();
+        rdr.read_f32::<LittleEndian>().unwrap();
+        rdr.read_f32::<LittleEndian>().unwrap();
+        let direction_tuple = (0f32, 0f32, 0f32, 1f32);
+        let direction_quaternion = Quaternion::try_from(direction_tuple).unwrap();
+        let direction_euler = Euler::from(direction_quaternion);
+        let direction = (direction_euler.x.0, direction_euler.y.0, direction_euler.z.0);
+        let angular_rate = (
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap(),
+            rdr.read_f32::<LittleEndian>().unwrap()
+        );
 
-        println!("Received Checksum: {rcs}");
-        if rcs == ccs {
-            println!("Checksums Approved! Exporting data to CSV...");
+        let device_state = rdr.read_u32::<LittleEndian>().unwrap();
 
-            let datetime = rdr.read_u32::<LittleEndian>().unwrap();
-            let altitude = rdr.read_f32::<LittleEndian>().unwrap();
-            let position = (
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap()
-            );
-            let velocity = (
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap()
-            );
-            let acceleration = (
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap()
-            );
-            rdr.read_f32::<LittleEndian>().unwrap();
-            rdr.read_f32::<LittleEndian>().unwrap();
-            rdr.read_f32::<LittleEndian>().unwrap();
-            rdr.read_f32::<LittleEndian>().unwrap();
-            let direction_tuple = (0f32, 0f32, 0f32, 1f32);
-            let direction_quaternion = Quaternion::try_from(direction_tuple).unwrap();
-            let direction_euler = Euler::from(direction_quaternion);
-            let direction = (direction_euler.x.0, direction_euler.y.0, direction_euler.z.0);
-            let angular_rate = (
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap(),
-                rdr.read_f32::<LittleEndian>().unwrap()
-            );
-
-            let device_state = rdr.read_u32::<LittleEndian>().unwrap();
-
-            wtr.write_record(&[datetime.to_string(),
-                altitude.to_string(),
-                position.0.to_string(),
-                position.1.to_string(),
-                position.2.to_string(),
-                velocity.0.to_string(),
-                velocity.1.to_string(),
-                velocity.2.to_string(),
-                acceleration.0.to_string(),
-                acceleration.1.to_string(),
-                acceleration.2.to_string(),
-                direction.0.to_string(),
-                direction.1.to_string(),
-                direction.2.to_string(),
-                angular_rate.0.to_string(),
-                angular_rate.1.to_string(),
-                angular_rate.2.to_string(),
-                device_state.to_string()
-            ]).expect("TODO: panic message");
-        } else {
-            println!("Checksum Failed")
-        }
+        wtr.write_record(&[datetime.to_string(),
+            altitude.to_string(),
+            position.0.to_string(),
+            position.1.to_string(),
+            position.2.to_string(),
+            velocity.0.to_string(),
+            velocity.1.to_string(),
+            velocity.2.to_string(),
+            acceleration.0.to_string(),
+            acceleration.1.to_string(),
+            acceleration.2.to_string(),
+            direction.0.to_string(),
+            direction.1.to_string(),
+            direction.2.to_string(),
+            angular_rate.0.to_string(),
+            angular_rate.1.to_string(),
+            angular_rate.2.to_string(),
+            device_state.to_string()
+        ]).expect("TODO: panic message");
         wtr.flush()?;
     }
     println!("Finished Exporting to CSV: \"{}\"!", file_path);
